@@ -5,6 +5,7 @@ import pygame
 from pygame.locals import *
 import math
 import sound
+import lvlconfigs
 from random import randint
 
 pygame.init()
@@ -21,7 +22,7 @@ FPSCLOCK=pygame.time.Clock()
 screen_dimensions = (700, 700)
 DISPLAYSURF = pygame.display.set_mode(screen_dimensions)
 pygame.display.set_caption("Perception")
-my_icon = pygame.image.load("player.png")
+my_icon = pygame.image.load("assets/player.png")
 pygame.display.set_icon(my_icon)
 EVENTS = []
 
@@ -51,6 +52,9 @@ def main():
 
         FPSCLOCK.tick(FPS) # pause a few milliseconds (1/FPS seconds)
 
+    pygame.quit()
+
+
 """
 #     ____                            
 #    / ___|   __ _   _ __ ___     ___ 
@@ -66,7 +70,7 @@ class Game:
         self.room = MainMenu(self)
 
         #Start some music
-        pygame.mixer.music.load('music.ogg')
+        pygame.mixer.music.load('assets/music.ogg')
         pygame.mixer.music.play(-1)
 
     def update(self, events):
@@ -86,7 +90,7 @@ class Game:
 #
 """
 class MainMenu:
-    title_img = pygame.image.load("title.png").convert()
+    title_img = pygame.image.load("assets/title.png").convert()
     font = pygame.font.Font(None, 40)
     def __init__(self, game):
         self.game=game
@@ -147,23 +151,19 @@ class Level(object):
     tip_font = pygame.font.Font(None, 24)
     misc_font = pygame.font.Font(None, 24)
     tip_color = (255,255,255)
-    def __init__(self, game, start_pos, spawn_drop, finish_pos, allowed_shifts, index, bground_img_filename, make_respawn_cool_noise_at_start=False):
+    def __init__(self, game, start_pos, finish_pos, index, allowed_shifts=0, make_respawn_cool_noise_at_start=False):
         """@param start_ps is a tuple containing the player's start x and y (x,y)
-        @param spawn_drop is a boolean determining if the player will spawn a little bit above the
-        ground (it looks cooler to spawn that way. It should be False if the player is spawning in a tight area.
         @param finish_pos is a tuple containg the x and y of the finish (x,y)
         @param allowed_shifts is the number of gravity shifts the players may make as they do the level.
         @param index is the index, or level number of this level (zero-based)
-        @param bground_img_filename is a string of the filepath of this level's background image.
         @param make_respawn_cool_noise_at_start is a boolean that will determine if the respawn noise is made at
         the start. This is usually true if this level is the first one the player has clicked on."""
         self.game=game
         self.player_start_x = start_pos[0]
         self.player_start_y = start_pos[1]
-        if spawn_drop:
-            self.player = Player(self.game, (self.player_start_x, self.player_start_y - Player.spawn_dist_above_ground))
-        else:
-            self.player = Player(self.game, (self.player_start_x, self.player_start_y))
+
+        self.player = Player(self.game, (self.player_start_x, self.player_start_y - Player.spawn_dist_above_ground))
+        
         self.end_x = finish_pos[0]
         self.end_y = finish_pos[1]
         self.finish = Finish(self.game, (self.end_x, self.end_y))
@@ -174,7 +174,18 @@ class Level(object):
         self.components = []
         self.tip_text_images = []
         self. tip_text_image_positions = []
-        self.background_img = pygame.image.load(bground_img_filename).convert()
+        
+        #Background Image!
+        if index <= 4: img_name = "clock-ascii.png"
+        elif 4 < index <= 9: img_name = "train-ascii.png"
+        elif 9 < index <= 14: img_name = "something-ascii.png"
+        elif 14 < index <= 19: img_name = "plane-ascii.png"
+        elif 19 < index <= 24: img_name = "cd-ascii.png" 
+        else: 
+            print ("idk what 2 do for bground img.") 
+            img_name="idk"
+        self.background_img = pygame.image.load("assets/"+img_name).convert()
+
         self.paused=False
         self.just_started_flash_timer=3 #Will cause the screen to flash white for 3 frames upon starting
         if make_respawn_cool_noise_at_start: sound.play_sound("level_start")
@@ -262,9 +273,7 @@ class Level(object):
             self.player.prevy = self.player.y
 
             for c in self.components:
-                if isinstance(c, Platform) or isinstance(c, Lava):
-                    c.rect.y = screen_dimensions[1] - c.rect.y - c.rect.height
-                    #c.rect.x = screen_dimensions[1] - c.rect.x - c.rect.width
+               c.vertical_flip()
               
             self.background_img = pygame.transform.flip(self.background_img, False, True)   # Vertically flip self.background_img
 
@@ -290,14 +299,7 @@ class Level(object):
 
 
             for c in self.components:
-                if isinstance(c, Platform) or isinstance(c, Lava):
-                    temp = c.rect.y
-                    c.rect.y = screen_dimensions[0] - (c.rect.x + c.rect.width)
-                    c.rect.x = temp
-                    # Swap heights and widths (height <--> width)
-                    temp = c.rect.height
-                    c.rect.height = c.rect.width
-                    c.rect.width = temp
+                c.rotate(-1)
                
             self.background_img = pygame.transform.rotate(self.background_img, 90)   # Rotate self.background_img 90 degrees counter-clockwise
 
@@ -323,16 +325,13 @@ class Level(object):
 
 
             for c in self.components:
-                if isinstance(c, Platform) or isinstance(c, Lava):
-                    temp = c.rect.x
-                    c.rect.x = screen_dimensions[1] - (c.rect.y + c.rect.height)
-                    c.rect.y = temp
-                    # Swap heights and widths (height <--> width)
-                    temp = c.rect.height
-                    c.rect.height = c.rect.width
-                    c.rect.width = temp
+                c.rotate(1)
                
             self.background_img = pygame.transform.rotate(self.background_img, -90)   # Rotate self.background_img 90 degrees clockwise
+
+    def cancel_spawn_drop(self):
+        """Cancels player spawning slightly above ground. Use for tight spawn areas."""
+        self.player.y += Player.spawn_dist_above_ground
 
 """
 #    ____    _                               
@@ -343,7 +342,7 @@ class Level(object):
 #                        |___/               
 """
 class Player(object):
-    head_img = pygame.image.load("player.png").convert()
+    head_img = pygame.image.load("assets/player.png").convert()
     head_width = head_img.get_rect().width
     head_height = head_img.get_rect().height
 
@@ -503,7 +502,7 @@ class Player(object):
 #
 """
 class Finish(object):
-    img = pygame.image.load("finish_circle.png").convert()
+    img = pygame.image.load("assets/finish_circle.png").convert()
     height = 40
     width = 40
     def __init__(self, game, pos):
@@ -513,7 +512,52 @@ class Finish(object):
          self.rect = self.img.get_rect(x=pos[0], y=pos[1])
     def draw(self, screen):
         screen.blit(Finish.img, (self.rect.x, self.rect.y))
-    
+ 
+"""   
+#     _____                                                              _   
+#    / ____|                                                            | |  
+#   | |        ___    _ __ ___    _ __     ___    _ __     ___   _ __   | |_ 
+#   | |       / _ \  | '_ ` _ \  | '_ \   / _ \  | '_ \   / _ \ | '_ \  | __|
+#   | |____  | (_) | | | | | | | | |_) | | (_) | | | | | |  __/ | | | | | |_ 
+#    \_____|  \___/  |_| |_| |_| | .__/   \___/  |_| |_|  \___| |_| |_|  \__|
+#                                | |                                         
+#                                |_|    
+"""                                     
+class Component(object):
+    """A generic class for game components."""
+    def __init__(self, game, rect):
+        self.game=game
+        self.rect=rect
+    def draw(self, screen):
+        print("This draw method is to be replaced!")
+    def update(self, events):
+        print("This update method is to be replaced!")
+    def rotate(self, direction):
+        """Rotates the component 90 degrees about center of the
+        screen in a given direction.
+        @param direction is an integer. 1=clockwise and -1=counter-clockwise."""
+        
+        if direction == 1:
+            temp = self.rect.x
+            self.rect.x = screen_dimensions[1] - (self.rect.y + self.rect.height)
+            self.rect.y = temp
+        elif direction == -1:
+            temp = self.rect.y
+            self.rect.y = screen_dimensions[0] - (self.rect.x + self.rect.width)
+            self.rect.x = temp
+        else: print ("Platform got a weird rotate value!")
+
+
+        # Swap heights and widths (height <--> width)
+        temp = self.rect.height
+        self.rect.height = self.rect.width
+        self.rect.width = temp
+
+    def vertical_flip(self):
+        """Flips the component vertically about the center of the screen."""
+        self.rect.y = screen_dimensions[1] - self.rect.y - self.rect.height
+
+
         
 """
 #    ____    _           _      __                            
@@ -523,14 +567,16 @@ class Finish(object):
 #   |_|     |_|  \__,_|  \__| |_|    \___/  |_|    |_| |_| |_|
 #                                                             
 """
-class Platform(object):
+class Platform(Component):
     COLOR = (60, 60, 255)
     def __init__(self, game, rect):
         """@param rect is a pygame.Rect representing the bounds of the platform"""
-        self.game=game
-        self.rect = rect
+        Component.__init__(self, game, rect)
     def draw(self, screen):
         pygame.draw.rect(screen, Platform.COLOR, self.rect)
+    def update(self, events):
+        pass
+    
 
 """
 #    _                             
@@ -540,7 +586,7 @@ class Platform(object):
 #   |_____|  \__,_|   \_/    \__,_|
 #                                  
 """
-class Lava(object):
+class Lava(Component):
     COLORS = [(220, 130, 0), (235, 140, 0), (210, 160, 0)]
     color = COLORS[0]
     def __init__(self, game, rect, direction):
@@ -550,8 +596,7 @@ class Lava(object):
         1 = up
         2 = left
         3 = down"""
-        self.game=game
-        self.rect = rect
+        Component.__init__(self, game, rect)
         self.org_x = rect.x
         self.org_y = rect.y
         # Move the lava block 1px in the idrection it is facing
@@ -568,7 +613,7 @@ class Lava(object):
         self.direction = direction
     def draw(self, screen):
         pygame.draw.rect(screen, Lava.color, self.rect)
-   
+
 
 """
 #    _                             _    ____                                        _                  
@@ -581,187 +626,91 @@ class Lava(object):
 class LevelGenerator:
     @staticmethod
     def make_level(game, level_index, respawn_noise_at_start=False):
-        """Constructs and return a new Level based on the given level_index"""
+        #Constructs and return a new Level based on the given level_index
 
-        """
-        The standard ascii picture for showing the layout of a level.
-        A good way to make the layout is by importing this into this
-        into asciiflow.com.
-        
-               100 200 300 400 500 600 700
-        (0,0)   |   |   |   |   |   |   | 
-            +---+---+---+---+---+---+---+ 
-            |                           | 
-        100-+                           | 
-            |                           | 
-        200-+                           | 
-            |                           | 
-        300-+                           | 
-            |                           | 
-        400-+                           | 
-            |                           | 
-        500-+                           | 
-            |                           | 
-        600-+                           | 
-            |                           | 
-        700-+---------------------------+
-        X = Platform
-        S = Start
-        F = Finish
+        #construct based on config text
+        config_text = lvlconfigs.get_level(level_index)
 
-        """
+        components = [] # An array of components for the level-to-be-made
+        start_pos=(-1,-1)
+        finish_pos=(-1,-1)
+
+
+        for row in enumerate(config_text.split("~")):
+            
+            text_in_row = row[1]
+
+            #Hunt for start_pos/finish_pos
+            for col in enumerate(text_in_row):
+                char = col[1]
+                if char == 'S' and start_pos==(-1, -1): #We has it! We has the first one!
+                    start_pos=(col[0]*25, row[0]*25)
+                elif char == 'E' and finish_pos==(-1, -1): #We has it! We has the first one!
+                    finish_pos=(col[0]*25, row[0]*25)
+
+            #Platforms!!!!
+
+            making_platform=False
+            platform_rects=[] #Array of pygame.Rect objects indicating positions of platforms
+            for col in enumerate(text_in_row):
+                char=col[1]
+                if char=='#' and making_platform==False: #Start a new platform rect
+                    making_platform=True
+                    platform_rects.append(pygame.Rect(col[0]*25, row[0]*25, 25, 25))
+                elif char=='#': #Continue the latest platform rect
+                    platform_rects[len(platform_rects)-1].width+=25
+
+                else: #Cease thy platform making
+                    making_platform=False
+
+            #add to components
+            for r in platform_rects:
+                components.append(Platform(game, r))
+
+
+        lvl = Level(game=game, start_pos=start_pos, finish_pos=finish_pos, index=level_index, make_respawn_cool_noise_at_start=respawn_noise_at_start)
+        lvl.components=components
+
         if level_index == 0:
-            """
-                   100 200 300 400 500 600 700
-            (0,0)   +   +   +   +   +   +   + 
-                +---+---+---+---+---+---+---+ 
-                |                           | 
-            100++                           | 
-                |                           | 
-            200++                           | 
-                |                           | 
-            300++                           | 
-                |                           | 
-            400++                           | 
-                |                           | 
-            500++                           | 
-                |    S                 F    | 
-            600++   XXXXXXXXXXXXXXXXXXXXX   | 
-                |                           | 
-            700++---------------------------+ 
-            X = Platform                      
-            S = Start                         
-            F = Finish                        
-
-            """
-            lvl = Level(game, (150, 460), True, (550,460), 0, 0, "clock-ascii.png", respawn_noise_at_start)
-            lvl.components.append(Platform(game, pygame.Rect(100, 500, 500, 50)))
             lvl.add_tip_text("Use WASD to Move.", (200,250))
             lvl.add_tip_text("Finish the Level by moving to the white circle.", (200, 280))
-            return lvl
+
         elif level_index == 1:
-            lvl = Level(game, (125, 600 - Player.head_height), True, (600 - Finish.width, 150), 1, 1, "clock-ascii.png", respawn_noise_at_start)
-            lvl.components.append(Platform(game, pygame.Rect(100, 600, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(600, 150, 50, 500)))
+            lvl.allowed_shifts=1
             lvl.add_tip_text("Distort the universe! Use the arrow keys to shift gravity.", (100, 400))
-            return lvl
+
         elif level_index == 2:
-            lvl = Level(game, start_pos=(150, 550 - Player.head_height), spawn_drop = True, finish_pos=(250, 250), allowed_shifts=2, index=2, bground_img_filename="clock-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Platform(game, pygame.Rect(100, 550, 400, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(500, 150, 50, 450)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 100, 450, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 150, 50, 250)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 400, 300, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(350, 250, 50, 150)))
-            lvl.components.append(Platform(game, pygame.Rect(200, 200, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(200, 250, 50, 100)))
+            lvl.allowed_shifts=2
             # Tip text
             lvl.add_tip_text("You only get a few shifts per level.",(100,460))
             lvl.add_tip_text("Use them wisely.",(100,485))
-            return lvl
+
         elif level_index == 3:
-            lvl = Level(game, start_pos=(130,560), spawn_drop=True, finish_pos=(505,355), allowed_shifts=1, index=3, bground_img_filename="clock-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Platform(game, pygame.Rect(50, 150, 250, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(50, 200, 50, 400)))
-            lvl.components.append(Platform(game, pygame.Rect(50, 600, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(200, 350, 50, 250)))
-            lvl.components.append(Platform(game, pygame.Rect(200, 300, 100, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(400, 150, 250, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(400, 300, 50, 150)))
-            lvl.components.append(Platform(game, pygame.Rect(450, 400, 150, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(600, 300, 50, 150)))
+            lvl.allowed_shifts=1
             # Tip text
             lvl.add_tip_text("Try different approaches.",(350,550))
-            return lvl
+
         elif level_index == 4:
-            lvl = Level(game, start_pos=(205, 555), spawn_drop=False, finish_pos=(305, 55), allowed_shifts=2, index=4, bground_img_filename="clock-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Platform(game, pygame.Rect(300, 100, 50, 100)))
-            lvl.components.append(Platform(game, pygame.Rect(350, 50, 50, 100)))
-            lvl.components.append(Platform(game, pygame.Rect(150, 350, 350, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(500, 350, 50, 200)))
-            lvl.components.append(Platform(game, pygame.Rect(150, 400, 50, 100)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 500, 150, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(250, 500, 50, 150)))
-            lvl.components.append(Platform(game, pygame.Rect(200, 600, 50, 50)))
-            # Tip text
-            lvl.add_tip_text("Sometimes, you must shift in mid-air.",(150, 275))
-            return lvl
+            lvl.allowed_shifts=2
+            lvl.cancel_spawn_drop()
+
         elif level_index == 5:
-            lvl = Level(game, start_pos=(105, 505), spawn_drop = True, finish_pos=(605, 105), allowed_shifts=3, index=5, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Platform(game, pygame.Rect(150, 0, 50, 100)))
-            lvl.components.append(Platform(game, pygame.Rect(150, 100, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(300, 150, 50, 300)))
-            lvl.components.append(Platform(game, pygame.Rect(150, 400, 50, 150)))
-            lvl.components.append(Platform(game, pygame.Rect(50, 550, 150, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(400, 200, 300, 50)))
-            return lvl
+            lvl.allowed_shifts=3
+           
         elif level_index == 6:
-            lvl = Level(game, start_pos=(155, 505), spawn_drop = True, finish_pos=(605, 105), allowed_shifts=1, index=6, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            lvl.components.append(Lava(game, pygame.Rect(250, 550, 100, 25), 1))
-            # Components
-            lvl.components.append(Lava(game, pygame.Rect(400, 550, 50, 25), 1))
-            lvl.components.append(Lava(game, pygame.Rect(500, 550, 200, 25), 1))
-            lvl.components.append(Platform(game, pygame.Rect(550, 50, 150, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(550, 100, 50, 200)))
-            lvl.components.append(Platform(game, pygame.Rect(650, 100, 50, 200)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 550, 250, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(400, 550, 50, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(500, 550, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(350, 500, 50, 100)))
-            lvl.components.append(Platform(game, pygame.Rect(450, 400, 50, 200)))
+            lvl.allowed_shifts=1
             # Tip text
             lvl.add_tip_text("Lava is bad. Don't touch it.", (50, 300))
-            return lvl
+        
         elif level_index == 7:
-            lvl = Level(game, start_pos=(355, 55), spawn_drop = True, finish_pos=(505, 55), allowed_shifts=3, index=7, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Lava(game, pygame.Rect(250, 150, 25, 240), 2))
-            lvl.components.append(Lava(game, pygame.Rect(400, 400, 25, 290), 2))
-            lvl.components.append(Lava(game, pygame.Rect(500, 150, 25, 390), 2))
-            lvl.components.append(Lava(game, pygame.Rect(400, 125, 125, 25), 3))
-            lvl.components.append(Platform(game, pygame.Rect(450, 0, 50, 100)))
-            lvl.components.append(Platform(game, pygame.Rect(250, 100, 300, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(250, 150, 50, 250)))
-            lvl.components.append(Platform(game, pygame.Rect(400, 250, 50, 450)))
-            lvl.components.append(Platform(game, pygame.Rect(500, 150, 50, 400)))
-            return lvl
+            lvl.allowed_shifts=3
+           
         elif level_index == 8:
-            lvl = Level(game, start_pos=(130, 450), spawn_drop = True, finish_pos=(305, 65), allowed_shifts=2, index=8, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Lava(game, pygame.Rect(0, 550, 100, 25), 1))
-            lvl.components.append(Lava(game, pygame.Rect(200, 600, 500, 25), 1))
-            lvl.components.append(Lava(game, pygame.Rect(0, 375, 400, 25), 3))
-            lvl.components.append(Lava(game, pygame.Rect(405, 475, 90, 25), 3))
-            lvl.components.append(Platform(game, pygame.Rect(0, 550, 100, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 500, 100, 150)))
-            lvl.components.append(Platform(game, pygame.Rect(200, 600, 500, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(0, 350, 400, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(400, 350, 100, 150)))
-            return lvl
+            lvl.allowed_shifts=2
+            
         elif level_index == 9:
-            lvl = Level(game, start_pos=(605, 455), spawn_drop = True, finish_pos=(205, 555), allowed_shifts=2, index=9, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-            # Components
-            lvl.components.append(Platform(game, pygame.Rect(550, 250, 150, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(550, 500, 150, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(350, 300, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(300, 450, 250, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(300, 100, 50, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(250, 100, 50, 500)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 600, 200, 50)))
-            lvl.components.append(Platform(game, pygame.Rect(100, 350, 50, 250)))
-            lvl.components.append(Platform(game, pygame.Rect(125, 100, 50, 250)))
-            lvl.components.append(Platform(game, pygame.Rect(150, 550, 50, 50)))
-            lvl.components.append(Lava(game, pygame.Rect(350, 325, 200, 25), 3))
-            lvl.components.append(Lava(game, pygame.Rect(300, 450, 250, 25), 1))
-            lvl.components.append(Lava(game, pygame.Rect(250, 100, 25, 500), 2))
-            lvl.components.append(Lava(game, pygame.Rect(325, 100, 25, 50), 0))
-            lvl.components.append(Lava(game, pygame.Rect(150, 100, 25, 250), 0))
-            lvl.components.append(Lava(game, pygame.Rect(125, 350, 25, 200), 0))
-            return lvl
+            lvl.allowed_shifts=2
+           
     ##    elif level_index == 10:
     ##        lvl = Level(start_pos=(0, 0), spawn_drop = True, finish_pos=(0, 0), allowed_shifts=0, index=10, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
     ##        # Components:
@@ -790,10 +739,14 @@ class LevelGenerator:
    
         else:
             print ("The requested level don't exist!")
-            lvl = Level(game, start_pos=(300, 300), spawn_drop = False, finish_pos=(800, 800), allowed_shifts=100, index=50, bground_img_filename="clock-ascii.png")
+            lvl = Level(game, start_pos=(300, 300), spawn_drop = False, finish_pos=(800, 800), allowed_shifts=100, index=50)
             lvl.components.append(Platform(game, pygame.Rect(200, 310, 300, 50)))
             lvl.add_tip_text("Thankyou for beta testing!", (200, 200))
-            return lvl
+        
+        return lvl
+
+
+
 
 # Start game only if this is the module being run.
 if __name__=="__main__":
