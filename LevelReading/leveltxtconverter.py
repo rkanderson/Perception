@@ -17,6 +17,8 @@ HASHTAG = (0, 0, 255) #Platform (BLUE)
 S = (255,255,255) #PlayerSpawn (WHITE)
 E = (0, 255, 0) #Exit (GREEN)
 L = (255, 0, 0) #Lava (RED)
+DOLLAR = (255, 255, 0) #Lock block (Yellow)
+K = (255, 255, 100) #Key (Lighter Yellow)
 
 for row in range(height):
 	

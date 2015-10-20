@@ -8,6 +8,7 @@ sounds = {}
 sounds["win"]=pygame.mixer.Sound("assets/win.ogg")
 sounds["level_start"]=pygame.mixer.Sound("assets/level_start.ogg")
 sounds["gravity_shift"]=pygame.mixer.Sound("assets/gravity_shift.ogg")
+sounds["pause"]=pygame.mixer.Sound("assets/pause.ogg")
 
 def play_sound(sound_name):
 	sounds[sound_name].play()

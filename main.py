@@ -194,7 +194,11 @@ class Level(object):
         """Updates the game state. Set self.is_completed to True if necessary."""
         
         for event in events: # Shall I pause?
-            if event.type==KEYDOWN and event.key==K_p: self.paused= not self.paused
+            if event.type==KEYDOWN and event.key==K_p: 
+                self.paused= not self.paused
+                sound.play_sound("pause")
+                if self.paused: pygame.mixer.music.pause()
+                else: pygame.mixer.music.unpause()
 
         if self.paused: return
 
@@ -206,7 +210,7 @@ class Level(object):
                 elif event.key==K_UP: self.gravity_shift_up()
                 elif event.key==K_LEFT: self.gravity_shift_left()
                 elif event.key==K_r: 
-                    self.game.room=LevelGenerator.make_level(self.game, self.index) #Restart
+                    self.game.room=LevelGenerator.make_level(game=self.game, level_index=self.index, respawn_noise_at_start=True) #Restart
                     return
                 elif event.key==K_m: 
                     self.game.room=MainMenu(self.game) #Return to MainMenu
@@ -230,11 +234,13 @@ class Level(object):
             for i in range(len(self.tip_text_images)):
                 screen.blit(self.tip_text_images[i], self.tip_text_image_positions[i])
 
-        for component in self.components:   # Draw all Platforms
-            if isinstance(component, Platform): component.draw(screen)
+        for component in [c for c in self.components if isinstance(c, Platform)]:   # Draw all Platforms
+            component.draw(screen)
+        
         Lava.color = Lava.COLORS[randint(0, 2)]
-        for component in self.components:   # Draw all Lavas
-            if isinstance(component, Lava): component.draw(screen)
+        for component in [c for c in self.components if isinstance(c, Lava)]:   # Draw all Lavas
+            component.draw(screen)
+
         self.player.draw(screen)
         self.finish.draw(screen)
 
@@ -421,8 +427,8 @@ class Player(object):
         self.on_ground = False
         collided_with_something_from_sides = False
         collided_with_something_from_corner = False
-        for c in components:
-            if isinstance(c, Platform) and c.rect.colliderect(Player.head_img.get_rect(left=self.x, top=self.y)):   # Upon colliding with a platform
+        for c in [c for c in components if isinstance(c, Platform)]:
+            if c.rect.colliderect(Player.head_img.get_rect(left=self.x, top=self.y)):   # Upon colliding with a platform
                 #print ("(DEBUG) collison with platform.")
                 if self.prevy + Player.head_height > c.rect.top and self.prevy < c.rect.bottom:   # hit from the side
                     if self.xspeed > 0: self.x = c.rect.left - Player.head_width
@@ -446,8 +452,8 @@ class Player(object):
         self.prevy = self.y
 
         # Check for any lava collisions, setting self.is_dead as necessary
-        for c in components:
-            if isinstance(c, Lava) and c.rect.colliderect(Player.head_img.get_rect(left=self.x,top=self.y)):
+        for c in [c for c in components if isinstance(c, Lava)]:
+            if c.rect.colliderect(Player.head_img.get_rect(left=self.x,top=self.y)):
                 self.is_dead = True
 
 
@@ -589,28 +595,11 @@ class Platform(Component):
 class Lava(Component):
     COLORS = [(220, 130, 0), (235, 140, 0), (210, 160, 0)]
     color = COLORS[0]
-    def __init__(self, game, rect, direction):
-        """@param rect is a pygame.Rect representing the bounds of the lava block
-        @param direction is an int value indicating the initial direction of the Lava block:
-        0 = right
-        1 = up
-        2 = left
-        3 = down"""
+    def __init__(self, game, rect):
+        """@param rect is a pygame.Rect object representing the area of the lava"""
         Component.__init__(self, game, rect)
         self.org_x = rect.x
         self.org_y = rect.y
-        # Move the lava block 1px in the idrection it is facing
-        if direction == 0:
-            self.rect.width += 1
-        elif direction == 1:
-            self.rect.y -= 1
-            self.rect.height += 1
-        elif direction == 2:
-            self.rect.x -= 1
-            self.rect.width += 1
-        elif direction == 3:
-            self.rect.height += 1
-        self.direction = direction
     def draw(self, screen):
         pygame.draw.rect(screen, Lava.color, self.rect)
 
@@ -649,7 +638,6 @@ class LevelGenerator:
                     finish_pos=(col[0]*25, row[0]*25)
 
             #Platforms!!!!
-
             making_platform=False
             platform_rects=[] #Array of pygame.Rect objects indicating positions of platforms
             for col in enumerate(text_in_row):
@@ -662,10 +650,27 @@ class LevelGenerator:
 
                 else: #Cease thy platform making
                     making_platform=False
-
-            #add to components
+            # and finally, add to components
             for r in platform_rects:
                 components.append(Platform(game, r))
+
+            #Lavas!!!!
+            making_lava=False
+            lava_rects=[] #Array of pygame.Rect objects indicating positions of lavas
+            for col in enumerate(text_in_row):
+                char=col[1]
+                if char=='L' and making_lava==False: #Start a new lava rect
+                    making_lava=True
+                    lava_rects.append(pygame.Rect(col[0]*25, row[0]*25, 25, 25))
+                elif char=='L': #Continue the latest lava rect
+                    lava_rects[len(lava_rects)-1].width+=25
+
+                else: #Cease thy lava making
+                    making_lava=False
+
+            # and finally, add to components
+            for r in lava_rects:
+                components.append(Lava(game, r))
 
 
         lvl = Level(game=game, start_pos=start_pos, finish_pos=finish_pos, index=level_index, make_respawn_cool_noise_at_start=respawn_noise_at_start)
@@ -677,7 +682,7 @@ class LevelGenerator:
 
         elif level_index == 1:
             lvl.allowed_shifts=1
-            lvl.add_tip_text("Distort the universe! Use the arrow keys to shift gravity.", (100, 400))
+            lvl.add_tip_text("Distort the universe! Use the arrow keys to shift gravity.", (75, 400))
 
         elif level_index == 2:
             lvl.allowed_shifts=2
