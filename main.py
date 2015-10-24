@@ -4,9 +4,7 @@
 import pygame
 from pygame.locals import *
 import math
-import sound
-import lvlconfigs
-from random import randint
+import random
 
 pygame.init()
 
@@ -78,8 +76,12 @@ class Game:
         self.room.update(events)
     def draw(self, screen):
         screen.fill(BLACK)
-        self.room.draw(screen)
-        pygame.display.update()
+        
+        dirty_rects = self.room.draw(screen)
+        
+        pygame.display.update(dirty_rects) #only the areas that have been changed r updated
+
+
 
 """
 #    __  __           _           __  __                        
@@ -108,10 +110,14 @@ class MainMenu:
             else:
                 column = level_index % 5
             self.buttons.append((pygame.Rect(50+125*column, 55+60*row, 100, 50),level_index))
+
+        self.dirty_rects=[(0, 0, screen_dimensions[0], screen_dimensions[1])]
             
     def update(self, events):
         for event in events:
-            if self.on_title and event.type==KEYDOWN: self.on_title=False
+            if self.on_title and event.type==KEYDOWN: 
+                self.on_title=False
+                self.dirty_rects.append((0,0,screen_dimensions[0], screen_dimensions[1]))
             elif event.type==MOUSEBUTTONDOWN and not self.get_level_index_of_button_at_mouse_pos()==None:
                 self.game.room = LevelGenerator.make_level(self.game, self.get_level_index_of_button_at_mouse_pos(), respawn_noise_at_start=True)
 
@@ -132,12 +138,18 @@ class MainMenu:
                 text_rect.centery = btn[0].centery
                 text_pos = (text_rect.left, text_rect.top)
                 screen.blit(text, text_pos)
+
+        #Return the dirty rects
+        return self.dirty_rects
            
     def get_level_index_of_button_at_mouse_pos(self):
         """@return the level index of the button at the current mouse position"""
         if not self.on_title:
             for btn in self.buttons:
                 if btn[0].collidepoint(pygame.mouse.get_pos()): return btn[1]
+
+
+
 
 """
 #    _                             _ 
@@ -187,8 +199,10 @@ class Level(object):
         self.background_img = pygame.image.load("assets/"+img_name).convert()
 
         self.paused=False
-        self.just_started_flash_timer=3 #Will cause the screen to flash white for 3 frames upon starting
+        self.just_started_flash_timer=3 #Will cause the screen to flash white for x frames upon starting
         if make_respawn_cool_noise_at_start: sound.play_sound("level_start")
+
+        self.dirty_rects = [(0, 0, screen_dimensions[0], screen_dimensions[1])]
        
     def update(self, events):
         """Updates the game state. Set self.is_completed to True if necessary."""
@@ -224,7 +238,8 @@ class Level(object):
         
 
     def draw(self,screen):
-        """Draws the entire level including the player, the finish, all tip texts, other text, and all components"""
+        """Draws the entire level including the player, the finish, all tip texts, other text, and all components.
+        @returns dirty_rects"""
         if not self.background_img == None:
             screen.blit(self.background_img, (0, 0))
         else:
@@ -235,14 +250,14 @@ class Level(object):
                 screen.blit(self.tip_text_images[i], self.tip_text_image_positions[i])
 
         for component in [c for c in self.components if isinstance(c, Platform)]:   # Draw all Platforms
-            component.draw(screen)
+            self.dirty_rects+=component.draw(screen)
         
-        Lava.color = Lava.COLORS[randint(0, 2)]
+        Lava.color = Lava.COLORS[random.randint(0, 2)]
         for component in [c for c in self.components if isinstance(c, Lava)]:   # Draw all Lavas
-            component.draw(screen)
+            self.dirty_rects+=component.draw(screen)
 
-        self.player.draw(screen)
-        self.finish.draw(screen)
+        self.dirty_rects+=self.player.draw(screen)
+        self.dirty_rects+=self.finish.draw(screen)
 
         #Draw other text
         screen.blit(Level.misc_font.render("LEVEL-"+str(self.index+1), 0, (255,255,0)),(20,20))
@@ -251,7 +266,12 @@ class Level(object):
         if self.just_started_flash_timer>0: 
             screen.fill(WHITE)
             self.just_started_flash_timer-=1
-        # XXX_RYAN_XXX was here!
+
+        if self.just_started_flash_timer==0: self.dirty_rects.append((0, 0, screen_dimensions[0], screen_dimensions[1]))
+
+        temp=self.dirty_rects
+        self.dirty_rects=[]
+        return temp
             
     def add_tip_text(self, text, pos):
         """Appends a rendered text image to self.tip_text_images using self.tip_font with the specified.
@@ -264,6 +284,9 @@ class Level(object):
     def gravity_shift_up(self):
         """Changes the coordinates of self.player, self.finish, and self.components (heights too)
         to create the illusion of a gravity shift upwards"""
+        #Register entire screen as dirty rect, so it'll show up.
+        self.dirty_rects.append((0, 0, screen_dimensions[0], screen_dimensions[1]))
+
         if self.allowed_shifts > 0:
             self.allowed_shifts -= 1
             sound.play_sound("gravity_shift")
@@ -286,6 +309,10 @@ class Level(object):
     def gravity_shift_left(self):
         """Changes the coordinates of self.player, self.finish, and self.components (height/width too)
         to create the illusion of a gravity shift rightwards"""
+
+        #Register entire screen as dirty rect, so it'll show up.
+        self.dirty_rects.append((0, 0, screen_dimensions[0], screen_dimensions[1]))
+
         if self.allowed_shifts > 0:
             self.allowed_shifts -= 1
             sound.play_sound("gravity_shift")
@@ -312,6 +339,10 @@ class Level(object):
     def gravity_shift_right(self):
         """Changes the coordinates of self.player, self.finish, and self.components (height/width too)
         to create the illusion of a gravity shift leftwards"""
+
+        #Register entire screen as dirty rect, so it'll show up.
+        self.dirty_rects.append((0, 0, screen_dimensions[0], screen_dimensions[1]))
+
         if self.allowed_shifts > 0:
             self.allowed_shifts -= 1
             sound.play_sound("gravity_shift")
@@ -377,9 +408,15 @@ class Player(object):
         Player.a_pressed = [False, False]
         Player.s_pressed = False
         Player.d_pressed = [False, False]
+
+        self.dirty_rects=[]
     def draw(self, screen):
         """Draws the player's head"""
         screen.blit(Player.head_img, (self.x, self.y))
+
+        temp = self.dirty_rects
+        self.dirty_rects = []
+        return temp
     def update(self, events):
         """updates based on booleans properties/position based on booleans
         @param components is an array containing all the Level's components"""
@@ -396,6 +433,9 @@ class Player(object):
                 elif event.key==K_a: self.key_a_released()
                 elif event.key==K_s: self.key_s_released()
                 elif event.key==K_d: self.key_d_released()
+
+
+        self.dirty_rects.append((self.x, self.y, self.head_width, self.head_height))
 
         # Updating position
         #x
@@ -416,6 +456,7 @@ class Player(object):
             self.yspeed += GRAVITY
         
         self.y += self.yspeed
+
 
         #update rect
         self.rect.x=self.x
@@ -463,6 +504,8 @@ class Player(object):
             self.yspeed=self.yspeed/-2
         if self.x < 0: self.x = 0
         if self.x+Player.head_width > screen_dimensions[0]: self.x = screen_dimensions[0]-Player.head_width
+
+        self.dirty_rects.append((self.x, self.y, self.head_width, self.head_height))
 
         # Check if dead and set self.is_dead if player has gone off the screen appropiate
         if self.y > screen_dimensions[1] or self.y+Player.head_height < 0 or self.x + Player.head_width < 0 or self.x > screen_dimensions[0]:
@@ -518,6 +561,7 @@ class Finish(object):
          self.rect = self.img.get_rect(x=pos[0], y=pos[1])
     def draw(self, screen):
         screen.blit(Finish.img, (self.rect.x, self.rect.y))
+        return [] #No dirty rects
  
 """   
 #     _____                                                              _   
@@ -580,6 +624,9 @@ class Platform(Component):
         Component.__init__(self, game, rect)
     def draw(self, screen):
         pygame.draw.rect(screen, Platform.COLOR, self.rect)
+
+        #No need for dirty rects
+        return []
     def update(self, events):
         pass
     
@@ -598,10 +645,11 @@ class Lava(Component):
     def __init__(self, game, rect):
         """@param rect is a pygame.Rect object representing the area of the lava"""
         Component.__init__(self, game, rect)
-        self.org_x = rect.x
-        self.org_y = rect.y
+        self.x = rect.x
+        self.y = rect.y
     def draw(self, screen):
         pygame.draw.rect(screen, Lava.color, self.rect)
+        return [self.rect]
 
 
 """
@@ -618,7 +666,7 @@ class LevelGenerator:
         #Constructs and return a new Level based on the given level_index
 
         #construct based on config text
-        config_text = lvlconfigs.get_level(level_index)
+        config_text = LevelGenerator.get_level_config(level_index)
 
         components = [] # An array of components for the level-to-be-made
         start_pos=(-1,-1)
@@ -716,31 +764,7 @@ class LevelGenerator:
         elif level_index == 9:
             lvl.allowed_shifts=2
            
-    ##    elif level_index == 10:
-    ##        lvl = Level(start_pos=(0, 0), spawn_drop = True, finish_pos=(0, 0), allowed_shifts=0, index=10, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-    ##        # Components:
-    ##        lvl.components.append(Platform(game, pygame.Rect(0, 0, 0, 0)))
-    ##        return lvl
-    ##    elif level_index == 11:
-    ##        lvl = Level(start_pos=(0, 0), spawn_drop = True, finish_pos=(0, 0), allowed_shifts=0, index=11, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-    ##        # Components:
-    ##        lvl.components.append(Platform(game, pygame.Rect(0, 0, 0, 0)))
-    ##        return lvl
-    ##    elif level_index == 12:
-    ##        lvl = Level(start_pos=(0, 0), spawn_drop = True, finish_pos=(0, 0), allowed_shifts=0, index=12, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-    ##        # Components:
-    ##        lvl.components.append(Platform(game, pygame.Rect(0, 0, 0, 0)))
-    ##        return lvl
-    ##    elif level_index == 13:
-    ##        lvl = Level(start_pos=(0, 0), spawn_drop = True, finish_pos=(0, 0), allowed_shifts=0, index=13, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-    ##        # Components:
-    ##        lvl.components.append(Platform(game, pygame.Rect(0, 0, 0, 0)))
-    ##        return lvl
-    ##    elif level_index == 14:
-    ##        lvl = Level(start_pos=(0, 0), spawn_drop = True, finish_pos=(0, 0), allowed_shifts=0, index=14, bground_img_filename="train-ascii.png", make_respawn_cool_noise_at_start=respawn_noise_at_start)
-    ##        # Components:
-    ##        lvl.components.append(Platform(game, pygame.Rect(0, 0, 0, 0)))
-    ##        return lvl
+   
    
         else:
             print ("The requested level don't exist!")
@@ -751,6 +775,323 @@ class LevelGenerator:
         return lvl
 
 
+
+    @staticmethod
+    def get_level_config(id):
+        "Returns a level config in the form of text"
+        return {
+            0:"                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "     SS              EE     ~"\
+            "     SS              EE     ~"\
+            "   ######################   ~"\
+            "   ######################   ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~",
+
+
+            1:"                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                   EE##     ~"\
+            "                   EE##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "                     ##     ~"\
+            "    SS               ##     ~"\
+            "    SS               ##     ~"\
+            "   #######           ##     ~"\
+            "   #######           ##     ~"\
+            "   #######           ##     ~"\
+            "                            ~"\
+            "                            ~",
+
+
+            2:"                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "         ##############     ~"\
+            "        ################    ~"\
+            "       ##             ###   ~"\
+            "      ###             ###   ~"\
+            "      ###             ###   ~"\
+            "      ###   ######    ###   ~"\
+            "      ###  ########   ###   ~"\
+            "      ###  #EE   ###  ###   ~"\
+            "      ###  #EE   ###  ###   ~"\
+            "      ###  #     ###  ###   ~"\
+            "      ###  #     ###  ###   ~"\
+            "      ###        ###  ###   ~"\
+            "      ###        ###  ###   ~"\
+            "      ###        ###  ###   ~"\
+            "       ############   ###   ~"\
+            "        ##########    ###   ~"\
+            "                      ###   ~"\
+            "                      ###   ~"\
+            "     SS               ###   ~"\
+            "     SS               ###   ~"\
+            "    ####################    ~"\
+            "    ###################     ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~",
+
+            3: "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "  ############    ########  ~"\
+            "  ############    ########  ~"\
+            "  ##                        ~"\
+            "  ##                        ~"\
+            "  ##                        ~"\
+            "  ##                        ~"\
+            "  ##                        ~"\
+            "  ##                        ~"\
+            "  ##     #####    ##    ##  ~"\
+            "  ##     #####    ##    ##  ~"\
+            "  ##     ##       ##    ##  ~"\
+            "  ##     ##       ## EE ##  ~"\
+            "  ##     ##       ## EE ##  ~"\
+            "  ##     ##       ########  ~"\
+            "  ##     ##       ########  ~"\
+            "  ##  SS ##                 ~"\
+            "  ##  SS ##                 ~"\
+            "  #########                 ~"\
+            "  #########                 ~"\
+            "                            ~"\
+            "                            ~",
+
+            4: "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "             EE##           ~"\
+            "             EE##           ~"\
+            "             ####           ~"\
+            "             ####           ~"\
+            "             ##             ~"\
+            "             ##             ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "         ##############     ~"\
+            "         ##############     ~"\
+            "         ##          ##     ~"\
+            "         ##          ##     ~"\
+            "         ##          ##     ~"\
+            "         ##          ##     ~"\
+            "      ########       ##     ~"\
+            "      ########       ##     ~"\
+            "            ##              ~"\
+            "         SS ##              ~"\
+            "         SS ##              ~"\
+            "        ######              ~"\
+            "        ######              ~"\
+            "                            ~"\
+            "                            ~",
+
+            5: ""\
+            "      ##                    ~"\
+            "      ##                    ~"\
+            "      ##                    ~"\
+            "      ##               EE   ~"\
+            "      #######          EE   ~"\
+            "      #######               ~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "           ##  #############~"\
+            "           ##  #############~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "           ##               ~"\
+            "      ##   ##               ~"\
+            "      ##   ##               ~"\
+            "      ##   ##               ~"\
+            "      ##                    ~"\
+            "      ##                    ~"\
+            "   SS ##                    ~"\
+            "   SS ##                    ~"\
+            "  ######                    ~"\
+            "  ######                    ~"\
+            "                            ~"\
+            "                            ~",
+
+            6: ""\
+            "                      ######~"\
+            "                      ######~"\
+            "                      ######~"\
+            "                      ##EE##~"\
+            "                      ##EE##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                      ##  ##~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                 ##         ~"\
+            "                 ##         ~"\
+            "                 ##         ~"\
+            "    SS      ##   ##         ~"\
+            "    SS      ##   ##         ~"\
+            "   #####LLLL##LLL##LLLLLLLLL~"\
+            "   #########################~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~", 
+
+            7: ""\
+            "                  ##        ~"\
+            "                  ## EE     ~"\
+            "             SS   ## EE     ~"\
+            "             SS   ##        ~"\
+            "          #############     ~"\
+            "          ########LLLL#     ~"\
+            "          L#         L#     ~"\
+            "          L#         L#     ~"\
+            "          L#   ##    L#     ~"\
+            "          L#   ##    L#     ~"\
+            "          L#   ##    L#     ~"\
+            "          L#   L#    L#     ~"\
+            "          L#   L#    L#     ~"\
+            "          L#   L#    L#     ~"\
+            "          L#   L#    L#     ~"\
+            "          L#   L#    L#     ~"\
+            "          LL   L#    L#     ~"\
+            "               L#    L#     ~"\
+            "               L#    L#     ~"\
+            "               L#    LL     ~"\
+            "               L#           ~"\
+            "               L#           ~"\
+            "               L#           ~"\
+            "               L#           ~"\
+            "               L#           ~"\
+            "               L#           ~"\
+            "               L#           ~"\
+            "               L#           ~",
+
+            8: "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "          EE                ~"\
+            "          EE                ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "#####################       ~"\
+            "LLLLLLLLLLLLLLLLL####       ~"\
+            "                 ####       ~"\
+            "                 ####       ~"\
+            "                 ####       ~"\
+            "      SS         ####       ~"\
+            "      SS         LLLL       ~"\
+            "     ####                   ~"\
+            "     ####                   ~"\
+            "LLLLL####                   ~"\
+            "#########                   ~"\
+            "     ####LLLLLLLLLLLLLLLLLLL~"\
+            "     #######################~"\
+            "                            ~"\
+            "                            ~",
+
+            9: "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "     #L    L##L             ~"\
+            "     #L    L##L             ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#         ######~"\
+            "     #L    L#    ###########~"\
+            "    ##     L#    #####      ~"\
+            "    ##     L#    LLLLL      ~"\
+            "    ##     L#               ~"\
+            "    #L     L#               ~"\
+            "    #L     L#               ~"\
+            "    #L EE  L#               ~"\
+            "    #L EE  L#LLLLLLLLL  SS  ~"\
+            "    ##################  SS  ~"\
+            "    ########################~"\
+            "                      ######~"\
+            "                            ~"\
+            "                            ~"
+
+
+
+        }[id]
+
+
+
+
+class sound:
+    sounds = {}
+    sounds["win"]=pygame.mixer.Sound("assets/win.ogg")
+    sounds["level_start"]=pygame.mixer.Sound("assets/level_start.ogg")
+    sounds["gravity_shift"]=pygame.mixer.Sound("assets/gravity_shift.ogg")
+    sounds["pause"]=pygame.mixer.Sound("assets/pause.ogg")
+
+    @staticmethod
+    def play_sound(sound_name):
+        sound.sounds[sound_name].play()
 
 
 # Start game only if this is the module being run.
