@@ -244,11 +244,7 @@ class Level(object):
             screen.blit(self.background_img, (0, 0))
         else:
             print ("(DEBUG) No background image")
-        if not self.button_pressed_at_least_once:   # Only draw tip text if the user hasn't pressed any buttons yet.
-                                                    # We can safely assume self.tti and self.ttis are the same size.
-            for i in range(len(self.tip_text_images)):
-                screen.blit(self.tip_text_images[i], self.tip_text_image_positions[i])
-
+       
         for component in [c for c in self.components if isinstance(c, Platform)]:   # Draw all Platforms
             self.dirty_rects+=component.draw(screen)
         
@@ -263,11 +259,18 @@ class Level(object):
         screen.blit(Level.misc_font.render("LEVEL-"+str(self.index+1), 0, (255,255,0)),(20,20))
         screen.blit(Level.misc_font.render("Shifts: "+str(self.allowed_shifts), 0, (255,255,0)),(screen_dimensions[0]-100,20))
 
-        if self.just_started_flash_timer>0: 
-            screen.fill(WHITE)
-            self.just_started_flash_timer-=1
+        #Tip text
+        if not self.button_pressed_at_least_once:   # Only draw tip text if the user hasn't pressed any buttons yet.
+                                                    # We can safely assume self.tti and self.ttis are the same size.
+            for i in range(len(self.tip_text_images)):
+                screen.blit(self.tip_text_images[i], self.tip_text_image_positions[i])
 
-        if self.just_started_flash_timer==0: self.dirty_rects.append((0, 0, screen_dimensions[0], screen_dimensions[1]))
+
+        if self.just_started_flash_timer>-1: 
+            self.just_started_flash_timer-=1
+            if self.just_started_flash_timer > 0: screen.fill(WHITE)
+
+            if self.just_started_flash_timer==-1: self.dirty_rects.append((0, 0, screen_dimensions[0], screen_dimensions[1]))
 
         temp=self.dirty_rects
         self.dirty_rects=[]
@@ -645,11 +648,41 @@ class Lava(Component):
     def __init__(self, game, rect):
         """@param rect is a pygame.Rect object representing the area of the lava"""
         Component.__init__(self, game, rect)
-        self.x = rect.x
-        self.y = rect.y
     def draw(self, screen):
         pygame.draw.rect(screen, Lava.color, self.rect)
         return [self.rect]
+
+"""
+#    _  __               
+#   | |/ /               
+#   | ' /    ___   _   _ 
+#   |  <    / _ \ | | | |
+#   | . \  |  __/ | |_| |
+#   |_|\_\  \___|  \__, |
+#                   __/ |
+#                  |___/ 
+"""
+"""class Key(component):
+    img = pygame.image.load("assets/key.png").convert_alpha()
+    def __init__(self, game, pos):
+        #@pram rect is a pygame.Rect representing the area of the key.
+        rect = pygame.Rect(pos[0], pos[1], self.img.get_width(), self.img.get_height())
+        Component.__init__(self, game, rect)
+    def draw(self, screen):
+        screen.blit(self.img, (self.rect.x, self.rect.y))"""
+
+"""
+#    _                       _    
+#   | |                     | |   
+#   | |        ___     ___  | | __
+#   | |       / _ \   / __| | |/ /
+#   | |____  | (_) | | (__  |   < 
+#   |______|  \___/   \___| |_|\_\
+#                                 
+#                                 
+"""
+"""class Lock(component):(
+    keyhole_img = pygame.image.load("assets/keyhole.png").convert_alpha()"""
 
 
 """
@@ -681,9 +714,9 @@ class LevelGenerator:
             for col in enumerate(text_in_row):
                 char = col[1]
                 if char == 'S' and start_pos==(-1, -1): #We has it! We has the first one!
-                    start_pos=(col[0]*25, row[0]*25)
+                    start_pos=(col[0]*25+5, row[0]*25+5)
                 elif char == 'E' and finish_pos==(-1, -1): #We has it! We has the first one!
-                    finish_pos=(col[0]*25, row[0]*25)
+                    finish_pos=(col[0]*25+5, row[0]*25+5)
 
             #Platforms!!!!
             making_platform=False
@@ -764,13 +797,11 @@ class LevelGenerator:
         elif level_index == 9:
             lvl.allowed_shifts=2
            
-   
+        elif level_index == 10:
+            lvl.allowed_shifts = 2
    
         else:
             print ("The requested level don't exist!")
-            lvl = Level(game, start_pos=(300, 300), spawn_drop = False, finish_pos=(800, 800), allowed_shifts=100, index=50)
-            lvl.components.append(Platform(game, pygame.Rect(200, 310, 300, 50)))
-            lvl.add_tip_text("Thankyou for beta testing!", (200, 200))
         
         return lvl
 
@@ -1073,6 +1104,35 @@ class LevelGenerator:
             "    ########################~"\
             "                      ######~"\
             "                            ~"\
+            "                            ~",
+
+            10: "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "                            ~"\
+            "     #L    L##L             ~"\
+            "     #L    L##L             ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#               ~"\
+            "     #L    L#         ######~"\
+            "     #L    L#    ###########~"\
+            "    ##     L#    #####      ~"\
+            "    ##     L#    LLLLL      ~"\
+            "    ##     L#               ~"\
+            "    #L     L#               ~"\
+            "    #L     L#               ~"\
+            "    #L EE  L#               ~"\
+            "    #L EE  L#LLLLLLLLL  SS  ~"\
+            "    ##################  SS  ~"\
+            "    ########################~"\
+            "                      ######~"\
+            "                            ~"\
             "                            ~"
 
 
@@ -1081,7 +1141,16 @@ class LevelGenerator:
 
 
 
-
+"""
+#                                      _ 
+#                                     | |
+#    ___    ___    _   _   _ __     __| |
+#   / __|  / _ \  | | | | | '_ \   / _` |
+#   \__ \ | (_) | | |_| | | | | | | (_| |
+#   |___/  \___/   \__,_| |_| |_|  \__,_|
+#                                        
+#                                        
+"""
 class sound:
     sounds = {}
     sounds["win"]=pygame.mixer.Sound("assets/win.ogg")
